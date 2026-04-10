@@ -26,7 +26,7 @@
 | 項目 | 内容 |
 |------|------|
 | 志望職種 | Webエンジニア（バックエンド寄り） |
-| 学習開始 | 2025年〇月 |
+| 学習開始 | 2025年4月 |
 | 使用言語 | Python（メイン）|
 | 最終目標 | Web APIの設計・実装ができるエンジニアになること |
 
@@ -148,8 +148,8 @@ python-learning-portfolio/
 
 ## 📬 連絡先
 
-- GitHub: [@your-username](https://github.com/your-username)
-- Email: your-email@example.com
+- GitHub: [kamisho-1802](https://github.com/kamisho-1802)
+- Email: mailshota0218@gmail.com
 
 ---
 
