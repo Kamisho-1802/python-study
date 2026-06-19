@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(py -0 2>&1; Write-Output \"---where python---\"; \\(Get-Command python -ErrorAction SilentlyContinue\\).Source; Write-Output \"---list 3.11 installs---\"; Get-ChildItem \"C:\\\\Users\\\\cre\\\\AppData\\\\Local\\\\Programs\\\\Python\" -ErrorAction SilentlyContinue | Select-Object Name; Get-ChildItem \"C:\\\\Python311\" -ErrorAction SilentlyContinue | Select-Object Name; Write-Output \"---winget python---\"; winget --version 2>&1)",
+      "PowerShell(winget --version 2>&1)",
+      "PowerShell(winget search Python.Python.3.11 --source winget 2>&1)"
+    ]
+  }
+}
