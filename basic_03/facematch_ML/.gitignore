@@ -1,0 +1,13 @@
+# 仮想環境
+.venv/
+
+# 生成物・データ（大きい/個人情報を含むため Git に入れない）
+data/
+index/
+
+# Python キャッシュ
+__pycache__/
+*.pyc
+
+# deepface のモデル重みキャッシュ（ホームに置かれるが念のため）
+.deepface/

@@ -1,0 +1,8 @@
+deepface
+faiss-cpu
+fastapi
+uvicorn[standard]
+python-multipart
+numpy
+pillow
+tf-keras
