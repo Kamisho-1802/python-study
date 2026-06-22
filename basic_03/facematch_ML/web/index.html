@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>有名人そっくり判定</title>
+  <style>
+    :root { color-scheme: light dark; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 16px;
+      text-align: center;
+    }
+    h1 { font-size: 1.3rem; }
+    video, canvas {
+      width: 100%;
+      max-width: 360px;
+      border-radius: 12px;
+      background: #000;
+    }
+    button {
+      font-size: 1rem;
+      padding: 12px 20px;
+      margin: 12px 0;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      cursor: pointer;
+    }
+    button:disabled { background: #9ca3af; cursor: default; }
+    #result { margin-top: 12px; text-align: left; }
+    .match {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 14px;
+      margin: 6px 0;
+      border-radius: 8px;
+      background: rgba(37, 99, 235, 0.1);
+    }
+    .match .rank { font-weight: bold; margin-right: 8px; }
+    .match .bar {
+      height: 6px;
+      background: #2563eb;
+      border-radius: 3px;
+      margin-top: 4px;
+    }
+    .error { color: #dc2626; font-weight: bold; }
+    .hint { color: #6b7280; font-size: 0.85rem; }
+  </style>
+</head>
+<body>
+  <h1>有名人そっくり判定</h1>
+  <p class="hint">1人で正面を向いて撮影してください</p>
+
+  <video id="cam" autoplay playsinline></video>
+  <canvas id="canvas" hidden></canvas>
+  <div>
+    <button id="shot">撮影して判定</button>
+  </div>
+  <div id="result"></div>
+
+  <script>
+    const video = document.getElementById("cam");
+    const result = document.getElementById("result");
+    const shotBtn = document.getElementById("shot");
+
+    // 内側カメラ（自撮り）を起動。HTTPS か localhost でないと動かない点に注意。
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "user" } })
+      .then((stream) => {
+        video.srcObject = stream;
+      })
+      .catch((err) => {
+        result.innerHTML =
+          '<p class="error">カメラを起動できません: ' + err.message + "</p>" +
+          '<p class="hint">HTTPS か localhost でアクセスしているか確認してください。</p>';
+      });
+
+    shotBtn.onclick = async () => {
+      if (!video.videoWidth) return;
+
+      // 現在のフレームを canvas に描画して JPEG に変換
+      const canvas = document.getElementById("canvas");
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      canvas.getContext("2d").drawImage(video, 0, 0);
+      const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
+
+      const fd = new FormData();
+      fd.append("file", blob, "shot.jpg");
+
+      shotBtn.disabled = true;
+      result.innerHTML = '<p class="hint">判定中…</p>';
+
+      try {
+        const res = await fetch("/analyze", { method: "POST", body: fd });
+        const data = await res.json();
+        render(data.matches);
+      } catch (e) {
+        result.innerHTML = '<p class="error">通信エラー: ' + e.message + "</p>";
+      } finally {
+        shotBtn.disabled = false;
+      }
+    };
+
+    function render(matches) {
+      // エラー時は { error: "..." } が返る
+      if (!Array.isArray(matches)) {
+        const msg = matches && matches.error ? matches.error : "判定できませんでした";
+        result.innerHTML = '<p class="error">' + msg + "</p>";
+        return;
+      }
+      if (matches.length === 0) {
+        result.innerHTML = '<p class="error">該当する有名人が見つかりませんでした</p>';
+        return;
+      }
+
+      // 上位の類似度を見やすく表示（similarity は -1〜1 のコサイン類似度）
+      result.innerHTML =
+        "<h2>似ている有名人 TOP" + matches.length + "</h2>" +
+        matches
+          .map((m, i) => {
+            const pct = Math.max(0, Math.min(100, Math.round(m.similarity * 100)));
+            return (
+              '<div class="match">' +
+              '<div><span class="rank">' + (i + 1) + "位</span>" + escapeHtml(m.name) +
+              '<div class="bar" style="width:' + pct + '%"></div></div>' +
+              "<div>" + m.similarity.toFixed(3) + "</div>" +
+              "</div>"
+            );
+          })
+          .join("");
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, (c) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+      ));
+    }
+  </script>
+</body>
+</html>

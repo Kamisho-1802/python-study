@@ -4,7 +4,7 @@
   data/celebs/<人物名>/*.jpg の形で有名人画像を配置する。
   公開データセット（ライセンス確認済み）を使うこと。
 
-実行:
+実行（プロジェクト直下から）:
   python src/build_index.py
 
 生成物:
@@ -18,34 +18,32 @@
 """
 
 import json
-import os
 
 import faiss
 import numpy as np
 from deepface import DeepFace
 
-from config import DATA_DIR, DETECTOR, MODEL, OUT_DIR
+from config import DATA_DIR, DETECTOR, INDEX_DIR, INDEX_PATH, LABELS_PATH, MODEL
 
 
 def build() -> None:
     vectors: list[np.ndarray] = []
     labels: list[str] = []
 
-    if not os.path.isdir(DATA_DIR):
+    if not DATA_DIR.is_dir():
         raise SystemExit(
             f"画像ディレクトリが見つかりません: {DATA_DIR}\n"
             "data/celebs/<人物名>/*.jpg の形で画像を配置してください。"
         )
 
-    for name in sorted(os.listdir(DATA_DIR)):
-        person_dir = os.path.join(DATA_DIR, name)
-        if not os.path.isdir(person_dir):
-            continue
-        for fn in sorted(os.listdir(person_dir)):
-            path = os.path.join(person_dir, fn)
+    for person_dir in sorted(p for p in DATA_DIR.iterdir() if p.is_dir()):
+        name = person_dir.name
+        for path in sorted(person_dir.iterdir()):
+            if not path.is_file():
+                continue
             try:
                 reps = DeepFace.represent(
-                    path, model_name=MODEL, detector_backend=DETECTOR
+                    str(path), model_name=MODEL, detector_backend=DETECTOR
                 )
             except ValueError:
                 # 顔を検出できなかった画像はスキップする（本番で最も多いエラー）
@@ -63,9 +61,9 @@ def build() -> None:
     index = faiss.IndexFlatIP(mat.shape[1])  # 内積 = 正規化済みならコサイン類似度
     index.add(mat)
 
-    os.makedirs(OUT_DIR, exist_ok=True)
-    faiss.write_index(index, os.path.join(OUT_DIR, "celebs.faiss"))
-    with open(os.path.join(OUT_DIR, "labels.json"), "w", encoding="utf-8") as f:
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    faiss.write_index(index, str(INDEX_PATH))
+    with open(LABELS_PATH, "w", encoding="utf-8") as f:
         json.dump(labels, f, ensure_ascii=False)
 
     print("登録ベクトル数:", index.ntotal)

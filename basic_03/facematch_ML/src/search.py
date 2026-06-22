@@ -19,14 +19,10 @@ import faiss
 import numpy as np
 from deepface import DeepFace
 
-# このファイルのあるディレクトリを import パスに加え、config を読めるようにする
+# uvicorn から src.main 経由で import される場合でも `from config import` が
+# 効くよう、このファイルのあるディレクトリを import パスに加える。
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import DETECTOR, MODEL, OUT_DIR  # noqa: E402
-
-# CWD に依存しないよう、プロジェクト直下を基準に index のパスを決める
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_INDEX_PATH = os.path.join(_PROJECT_ROOT, OUT_DIR, "celebs.faiss")
-_LABELS_PATH = os.path.join(_PROJECT_ROOT, OUT_DIR, "labels.json")
+from config import DETECTOR, INDEX_PATH, LABELS_PATH, MODEL  # noqa: E402
 
 _index = None
 _labels = None
@@ -36,13 +32,13 @@ def _load():
     """FAISS インデックスとラベルを1度だけ読み込む。"""
     global _index, _labels
     if _index is None:
-        if not (os.path.exists(_INDEX_PATH) and os.path.exists(_LABELS_PATH)):
+        if not (INDEX_PATH.exists() and LABELS_PATH.exists()):
             raise FileNotFoundError(
                 "インデックスが見つかりません。先にフェーズ2を実行してください: "
                 "python src/build_index.py"
             )
-        _index = faiss.read_index(_INDEX_PATH)
-        with open(_LABELS_PATH, encoding="utf-8") as f:
+        _index = faiss.read_index(str(INDEX_PATH))
+        with open(LABELS_PATH, encoding="utf-8") as f:
             _labels = json.load(f)
     return _index, _labels
 
