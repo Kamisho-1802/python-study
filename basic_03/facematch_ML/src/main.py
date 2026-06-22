@@ -28,12 +28,27 @@ app = FastAPI(title="Celebrity Lookalike")
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
-    """アップロードされた画像を判定し、似ている有名人を JSON で返す。"""
-    with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
-        shutil.copyfileobj(file.file, tmp)
-        tmp.flush()
-        result = find_lookalike(tmp.name, k=3)  # with を抜けると一時ファイルは自動削除
-    return {"matches": result}
+    """アップロードされた画像を判定し、似ている有名人を JSON で返す。
+
+    どんな失敗でも 500（HTMLのトレースバック）で落とさず、必ず JSON を返す。
+    こうしておくと、フロント側は常に res.json() でき、原因が画面に出る。
+    """
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".jpg") as tmp:
+            shutil.copyfileobj(file.file, tmp)
+            tmp.flush()
+            result = find_lookalike(tmp.name, k=3)  # with を抜けると一時ファイルは自動削除
+        return {"matches": result}
+    except FileNotFoundError:
+        # インデックス未生成（フェーズ2をまだ実行していない）
+        return {
+            "matches": {
+                "error": "インデックスがありません。先に python src/build_index.py を実行してください"
+            }
+        }
+    except Exception as e:  # noqa: BLE001
+        # 想定外の例外も握りつぶさず、理由を JSON で返す（サーバは落とさない）
+        return {"matches": {"error": f"判定に失敗しました: {type(e).__name__}: {e}"}}
 
 
 # フェーズ4の web/ を配信する（まだ index.html が無い場合は / は 404 になる）

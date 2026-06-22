@@ -49,62 +49,118 @@
     }
     .error { color: #dc2626; font-weight: bold; }
     .hint { color: #6b7280; font-size: 0.85rem; }
+    .sep { margin: 16px 0 4px; color: #6b7280; font-size: 0.85rem; }
+    #preview { width: 100%; max-width: 360px; border-radius: 12px; }
   </style>
 </head>
 <body>
   <h1>有名人そっくり判定</h1>
-  <p class="hint">1人で正面を向いて撮影してください</p>
+  <p class="hint">1人で正面を向いた画像で判定します</p>
 
+  <!-- (A) カメラで撮影 -->
   <video id="cam" autoplay playsinline></video>
   <canvas id="canvas" hidden></canvas>
   <div>
     <button id="shot">撮影して判定</button>
   </div>
+
+  <!-- (B) カメラが使えない環境向け: 画像ファイルを読み込んで判定 -->
+  <p class="sep">― または画像ファイルを選んで判定 ―</p>
+  <div>
+    <input id="fileInput" type="file" accept="image/*" />
+  </div>
+  <img id="preview" hidden alt="選択した画像" />
+
   <div id="result"></div>
 
   <script>
     const video = document.getElementById("cam");
     const result = document.getElementById("result");
     const shotBtn = document.getElementById("shot");
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
 
     // 内側カメラ（自撮り）を起動。HTTPS か localhost でないと動かない点に注意。
-    navigator.mediaDevices
-      .getUserMedia({ video: { facingMode: "user" } })
-      .then((stream) => {
-        video.srcObject = stream;
-      })
-      .catch((err) => {
-        result.innerHTML =
-          '<p class="error">カメラを起動できません: ' + err.message + "</p>" +
-          '<p class="hint">HTTPS か localhost でアクセスしているか確認してください。</p>';
-      });
+    // カメラが使えなくても、下の「画像ファイルを選んで判定」は使えるようにする。
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      navigator.mediaDevices
+        .getUserMedia({ video: { facingMode: "user" } })
+        .then((stream) => {
+          video.srcObject = stream;
+        })
+        .catch((err) => {
+          disableCamera(
+            "カメラを起動できません (" + err.message + ")。" +
+            "下の画像ファイル選択で判定できます。"
+          );
+        });
+    } else {
+      disableCamera("この環境ではカメラを使えません。下の画像ファイル選択で判定できます。");
+    }
 
+    function disableCamera(msg) {
+      video.hidden = true;
+      shotBtn.disabled = true;
+      result.innerHTML = '<p class="hint">' + escapeHtml(msg) + "</p>";
+    }
+
+    // (A) カメラ撮影 → 判定
     shotBtn.onclick = async () => {
       if (!video.videoWidth) return;
-
-      // 現在のフレームを canvas に描画して JPEG に変換
       const canvas = document.getElementById("canvas");
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       canvas.getContext("2d").drawImage(video, 0, 0);
       const blob = await new Promise((r) => canvas.toBlob(r, "image/jpeg", 0.9));
+      if (!blob) {
+        result.innerHTML = '<p class="error">画像を取得できませんでした。もう一度お試しください。</p>';
+        return;
+      }
+      preview.hidden = true;
+      await analyze(blob, "shot.jpg");
+    };
 
+    // (B) 画像ファイル選択 → 判定（カメラが無い環境でも試走できる）
+    fileInput.onchange = async () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      // 選んだ画像をプレビュー表示
+      preview.src = URL.createObjectURL(f);
+      preview.hidden = false;
+      await analyze(f, f.name || "upload.jpg");
+    };
+
+    // 共通: blob を /analyze に POST して結果を表示する
+    async function analyze(blob, filename) {
       const fd = new FormData();
-      fd.append("file", blob, "shot.jpg");
+      fd.append("file", blob, filename);
 
       shotBtn.disabled = true;
+      fileInput.disabled = true;
       result.innerHTML = '<p class="hint">判定中…</p>';
 
       try {
         const res = await fetch("/analyze", { method: "POST", body: fd });
-        const data = await res.json();
+
+        // サーバが JSON 以外（500 のトレースバック等）を返しても落ちないようにする
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch (_) {
+          result.innerHTML =
+            '<p class="error">サーバがエラーを返しました (HTTP ' + res.status + ")</p>" +
+            '<p class="hint">' + escapeHtml(text.slice(0, 300)) + "</p>";
+          return;
+        }
         render(data.matches);
       } catch (e) {
-        result.innerHTML = '<p class="error">通信エラー: ' + e.message + "</p>";
+        result.innerHTML = '<p class="error">通信エラー: ' + escapeHtml(e.message) + "</p>";
       } finally {
-        shotBtn.disabled = false;
+        shotBtn.disabled = !!video.hidden ? true : false;
+        fileInput.disabled = false;
       }
-    };
+    }
 
     function render(matches) {
       // エラー時は { error: "..." } が返る
