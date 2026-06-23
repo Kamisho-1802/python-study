@@ -1,0 +1,22 @@
+{
+  // Codespaces / Dev Containers の設定。
+  // 目的: コンテナ作成のたびに、facematch_ML が動く状態を自動で用意する。
+  //  - OpenCV(cv2) が必要とするシステムライブラリ(libGL 等)を入れる
+  //  - 仮想環境(.venv)を作って requirements.txt をインストールする
+  // これにより「libGL.so.1 が無い」「faiss が無い」を毎回手作業で直さずに済む。
+  "name": "python-study",
+
+  // 現状の Codespaces と同じ universal イメージ(Python 3.12 入り)を使う。
+  // 既存の .venv(python3.12) と食い違わないよう、あえてバージョンを固定しない。
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+
+  // コンテナ作成後に一度だけ実行されるセットアップ。
+  // （Codespace の Rebuild 時にも再実行される）
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}
