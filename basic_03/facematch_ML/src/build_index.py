@@ -19,11 +19,29 @@
 
 import json
 
+import cv2
 import faiss
 import numpy as np
 from deepface import DeepFace
 
 from config import DATA_DIR, DETECTOR, INDEX_DIR, INDEX_PATH, LABELS_PATH, MODEL
+
+
+def _imread_unicode(path) -> np.ndarray | None:
+    """日本語などを含むパスでも画像を読み込む。
+
+    deepface（内部の OpenCV imread）は非英語文字を含むパスを弾く
+    （"Input image must not have non-english characters"）。
+    そこで np.fromfile + cv2.imdecode で自前に読み込み、
+    パス文字列ではなく画像配列(BGR)を DeepFace.represent へ渡す。
+    こうすると人物フォルダ名（＝ラベル）を日本語のまま使える。
+    読み込めない（壊れている・非対応形式）場合は None を返す。
+    """
+    try:
+        data = np.fromfile(str(path), dtype=np.uint8)
+        return cv2.imdecode(data, cv2.IMREAD_COLOR)
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def build() -> None:
@@ -41,9 +59,14 @@ def build() -> None:
         for path in sorted(person_dir.iterdir()):
             if not path.is_file():
                 continue
+            img = _imread_unicode(path)
+            if img is None:
+                # 画像として読めない（壊れている / 非対応形式）
+                print("画像を読み込めずスキップ:", path)
+                continue
             try:
                 reps = DeepFace.represent(
-                    str(path), model_name=MODEL, detector_backend=DETECTOR
+                    img, model_name=MODEL, detector_backend=DETECTOR
                 )
             except ValueError:
                 # 顔を検出できなかった画像はスキップする（本番で最も多いエラー）
